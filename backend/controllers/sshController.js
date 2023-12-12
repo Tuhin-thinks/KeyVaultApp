@@ -26,10 +26,10 @@ const generateSSHKey = async (req, res) => {
     exec(key_generation_command, (err, stdout, stderr) => {
         if (err) {
             console.log(err);
-            return res.status(500).send("Internal Server Error");
+            return res.status(500).send({ message: "Internal Server Error" });
         } else if (stderr) {
             console.log(stderr);
-            return res.status(400).send("Bad Request");
+            return res.status(400).send({ message: "Bad Request" });
         } else {
             console.log(stdout);
         }
@@ -54,10 +54,16 @@ const downloadprivateKeyFile = (req, res) => {
     if (fs.existsSync(sshKeyPath)) {
         res.download(sshKeyPath);
     } else {
-        res.status(404).send("Not Found");
+        res.status(404).send({ message: "Inavlid Private key ID" });
     }
 };
 
+/**
+ * To connect to client using SSH, the client must send the host, username and private key ID
+ * @param {*} req
+ * @param {*} res
+ * @returns
+ */
 const connectToSSHClient = async (req, res) => {
     const { host, username, privateKeyID } = req.body;
 
@@ -75,13 +81,19 @@ const connectToSSHClient = async (req, res) => {
             const conn = await connect(config);
             ssh_clients[privateKeyID] = conn;
         }
-        return res.status(200).send("OK");
+        return res.status(200).send({ message: "OK" });
     } catch (err) {
         console.log(err);
         return res.status(500).send({ message: err.message ?? err });
     }
 };
 
+/**
+ * Function to navigate to a directory in the client, for the provided private key ID
+ * @param {*} req
+ * @param {*} res
+ * @returns
+ */
 const navigateToDirectory = async (req, res) => {
     const { privateKeyID, directoryPath } = req.body;
     const { code, signal } = await execute(
@@ -92,18 +104,33 @@ const navigateToDirectory = async (req, res) => {
     return res.status(200).send({ code, signal });
 };
 
+/**
+ * Function to list all files and folders in a directory
+ * @param {*} req
+ * @param {*} res
+ * @returns
+ */
 const listDirectory = async (req, res) => {
     const { privateKeyID } = req.body;
 
     if (!ssh_clients[privateKeyID])
         return res.status(400).send({ message: "SSH client not connected" });
 
-    let directories = [];
+    let contents = [];
 
-    // capture the output of the command in a list and send it to the client
-    await execute(ssh_clients[privateKeyID], `ls`, directories, process.stdout);
+    const { code } = await execute(
+        ssh_clients[privateKeyID],
+        `ls`,
+        contents,
+        process.stdout
+    );
 
-    return res.status(200).send({ directories });
+    if (code !== 0)
+        return res
+            .status(500)
+            .send({ message: "Failed to list contents of the directory" });
+
+    return res.status(200).send({ contents });
 };
 
 export {
