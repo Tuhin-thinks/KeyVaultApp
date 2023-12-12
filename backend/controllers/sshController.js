@@ -120,7 +120,7 @@ const listDirectory = async (req, res) => {
 
     const { code } = await execute(
         ssh_clients[privateKeyID],
-        `ls`,
+        `ls`, // TODO: Add support for windows devices
         contents,
         process.stdout
     );
